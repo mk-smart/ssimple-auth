@@ -1,0 +1,1 @@
+javac -sourcepath src/ -d bin/ src/org/mksmart/datahub/keyauth/KeyAuth.java 

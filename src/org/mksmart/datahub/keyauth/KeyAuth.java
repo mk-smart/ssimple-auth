@@ -6,7 +6,24 @@ import java.sql.SQLException;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.Properties;
+import java.util.ArrayList;
 import java.io.FileInputStream;
+
+/**
+ * Simple authentication methods based on key and optionally referrers and IP, based on a very simple MySQL database
+ * 
+ * Requires a table "rights" created through 
+ * create table rights (
+ *      id int(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY, 
+ *      ukey varchar(128) NOT NULL, 
+ *      referrer varchar(256), 
+ *      IP varchar(128), 
+ *      uright varchar(30) NOT NULL,
+ *      rID varchar(256)
+ * );
+ * @author mdaquin
+ **/
+
 
 public class KeyAuth {
 
@@ -67,8 +84,29 @@ public class KeyAuth {
 	}
     }
 
+    public String[] listResourcesWithRight(User user, Right right) throws KeyAuthException {
+	ArrayList<String> results = new ArrayList<String>();
+	PreparedStatement stmt = null;
+	ResultSet rs = null;
+	try {
+	    stmt = generateListQuery(user, right);
+	    rs = stmt.executeQuery();
+	    while (rs.next()){
+		results.add(rs.getString(1));
+	    }
+		    return results.toArray(new String[results.size()]);
+	}
+	catch (SQLException ex){
+	    throw new KeyAuthException("Cannot check authorisation", ex);
+	}
+	finally {
+	    if (rs != null) {try {rs.close();} catch (SQLException sqlEx) { } rs = null;}
+	    if (stmt != null) {try {stmt.close();} catch (SQLException sqlEx) { } stmt = null;}
+	}
+    }
+    
     private PreparedStatement generateTestQuery(User user, String resourceID, Right right) throws SQLException {	
-	String q = "select ukey from rights where ( ukey = ? OR ukey = '*' ) AND ( referrer = '*'  OR referrer = ?  ) AND ( IP = '*' OR IP = ? ) AND ( uright = '*' OR uright = ? ) AND (rID = '*' OR rID = ?)";
+	String q = "select distinct ukey from rights where ( ukey = ? OR ukey = '*' ) AND ( referrer = '*'  OR referrer = ?  ) AND ( IP = '*' OR IP = ? ) AND ( uright = '*' OR uright = ? ) AND (rID = '*' OR rID = ?)";
 	PreparedStatement ps = conn.prepareStatement(q);
 	ps.setString(1, user.getKey());
 	if (user.getReferrer()!=null) ps.setString(2, user.getReferrer());
@@ -78,6 +116,18 @@ public class KeyAuth {
 	ps.setString(4, right.toString());
 	if (resourceID!=null) ps.setString(5, resourceID);
 	else ps.setString(5, "*");
+	return ps;
+    }
+
+    private PreparedStatement generateListQuery(User user, Right right) throws SQLException {	
+	String q = "select distinct rID from rights where ( ukey = ? OR ukey = '*' ) AND ( referrer = '*'  OR referrer = ?  ) AND ( IP = '*' OR IP = ? ) AND ( uright = '*' OR uright = ? )";
+	PreparedStatement ps = conn.prepareStatement(q);
+	ps.setString(1, user.getKey());
+	if (user.getReferrer()!=null) ps.setString(2, user.getReferrer());
+	else ps.setString(2, "*");
+	if (user.getIP()!=null) ps.setString(3, user.getIP());
+	else ps.setString(3, "*");
+	ps.setString(4, right.toString());
 	return ps;
     }
 
@@ -133,6 +183,15 @@ public class KeyAuth {
 		if (args[3].equals("grant")) rr = Right.GRANT;
 		User u = new User(key);
 		System.out.println(ka.authorize(u, r, rr));
+	    } else if (args[0].equals("list")){
+		String key = args[1];
+		Right rr = null;
+		if (args[2].equals("write")) rr = Right.WRITE;
+		if (args[2].equals("read"))  rr = Right.READ;
+		if (args[2].equals("grant")) rr = Right.GRANT;
+		User u = new User(key);
+		String[] rs = ka.listResourcesWithRight(u, rr);
+		for (String r : rs) System.out.println("- "+r);		
 	    }	    
 	} catch (Exception e){
 	    e.printStackTrace();

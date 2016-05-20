@@ -82,6 +82,7 @@ public class KeyAuth {
             e.printStackTrace();
         }
     }
+    
     private String host, DB, user, password;
 
     private int port;
